@@ -15,7 +15,7 @@ tasks:
     desc: Start postgres container
     cmds:
       - echo Starting postgres container
-      - docker run -e POSTGRES_PASSWORD=foobarbaz -v pgdata:/var/lib/postgresql/data -p 5432:5432 postgres:16.3-alpine
+      - docker run -e POSTGRES_PASSWORD=foobarbaz -v pgdata_16:/var/lib/postgresql/data -p 5432:5432 postgres:16.3-alpine
 
   run-psql-init-script:
     desc: Execute psql commands
