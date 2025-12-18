@@ -27,7 +27,9 @@ jobs:
         service: ${{ fromJson(needs.filter.outputs.services) }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          fetch-depth: 0 # v6.0.0
       #Set up Node
       - name: Setup Node.js environment
         if: ${{startsWith(matrix.service, 'services/node/') || startsWith(matrix.service, 'services/react/')}}
