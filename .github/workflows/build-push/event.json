@@ -1,4 +1,7 @@
 {
+  "inputs": {
+    "service": "services/node/api-node"
+  },
   "repository": {
     "default_branch": "weeek1"
   }
