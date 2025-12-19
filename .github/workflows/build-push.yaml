@@ -16,7 +16,7 @@ on:
         required: true
         options:
           - services/go/api-golang
-          - service/node/api-node
+          - services/node/api-node
           - services/other/api-golang-migrator
           - services/python/load-generator-python
           - services/react/client-react
@@ -62,8 +62,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # service: ${{ fromJson(needs.filter.outputs.services) }}
-        service: ["services/node/api-node"]
+        service: ${{ fromJson(needs.filter.outputs.services) }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.0.0
@@ -87,17 +86,21 @@ jobs:
         id: image-tag
         working-directory: ${{ matrix.service }}
         env:
-          ENVIRONMENT: staging
+          ENVIRONMENT: ${{ needs.filter.outputs.environment }}
           SERVICE: ${{ matrix.service }}
+          INPUT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || ''}}
         run: |
-          if [[ "$ENVIRONMENT" == "production" ]]; then
+          if [[ -n "$INPUT_VERSION" ]]; then
+            version="$INPUT_VERSION"
+            image_tag=$(task utils:manual-version-tag -- "$INPUT_VERSION")
+          elif [[ "$ENVIRONMENT" == "production" ]]; then
             version=$(task utils:generate-version -- "$SERVICE")
             image_tag=$(task utils:generate-version-tag -- "$SERVICE")
           else
             version=$(task utils:generate-extended-version -- "$SERVICE")
             image_tag=$(task utils:generate-extended-version-tag -- "$SERVICE")
           fi
-          echo "vesion=${version}" >> $GITHUB_OUTPUT
+          echo "version=${version}" >> $GITHUB_OUTPUT
           echo "image_tag=$image_tag" >> $GITHUB_OUTPUT
           # TODO: generate version and image_tag properly
           echo "version=${version}" 
