@@ -1,4 +1,5 @@
-name: UpdateGitops Manifests
+name: Update GitOpManifest
+
 on:
   workflow_dispatch:
     inputs:
@@ -13,34 +14,31 @@ on:
           - services/react/client-react
       version:
         required: true
-        description: version to use for tagging images
+        description: version to deploy
         type: string
       environment:
         required: true
-        description: environment to deploy
+        description: environment to deploy to
         type: choice
         options:
           - development
           - staging
           - production
+
 jobs:
   update-manifests:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.0.0
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Install task
         uses: ./.github/actions/setup-dependencies
-        with:
-          task_version: v3.44.1
       - name: Update manifests
         working-directory: ${{ inputs.service}}
         run: |
-          task utils:update-image-tags-service |
+          task utils:update-image-tags-service \
             NEW_TAG=${{ inputs.version }} \
-            ENVIRONMENT=${{ inputs.environment }} \
+            ENVIRONMENT=${{ inputs.environment }}
       - name: check diff
         run: |
           git diff
