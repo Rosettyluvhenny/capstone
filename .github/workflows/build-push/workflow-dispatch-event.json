@@ -1,6 +1,9 @@
 {
   "inputs": {
-    "service": "services/go/api-golang",
-    "version": "foobarbaz"
+    "service": "services/node/api-node",
+    "version": "foobarzoo"
+  },
+  "repository": {
+    "default_branch": "weeek1"
   }
 }
