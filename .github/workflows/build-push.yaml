@@ -1,18 +1,17 @@
-name: Build and Push Container Images
+name: Build and push Container Images
 
 on:
   push:
     branches:
-      - main
+      - weeek1
     paths:
       - services/**
     tags:
-      - "**@[0-9]*.[0-9]*.[0-9]*" # service/foo/bar@X.Y.Z
-
+      - "**@[0-9]*.[0-9]*.[0-9]*"
   workflow_dispatch:
     inputs:
       service:
-        description: "Service to build"
+        description: service to build
         type: choice
         required: true
         options:
@@ -22,85 +21,80 @@ on:
           - services/python/load-generator-python
           - services/react/client-react
       version:
-        description: "Version/tag to use (optional; defaults generating with git describe)"
+        description: version to use for tagging images
         required: false
-        type: string
-
-permissions:
-  actions: write # used to trigger deploy workflow
-  contents: read
-
 jobs:
   filter:
     runs-on: ubuntu-24.04
     outputs:
-      services: ${{ steps.set-output.outputs.services }}
+      services: ${{ steps.set-output.outputs.service }}
       environment: ${{ steps.set-output.outputs.environment }}
     steps:
-      - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v5.0.0
-        if: ${{ github.event_name == 'push' && github.ref_type == 'branch' && github.ref_name == 'main' }}
-      - name: Paths Changes Filter
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.0.0
+      - name: filter
         id: filter
-        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-        if: ${{ github.event_name == 'push' && github.ref_type == 'branch' && github.ref_name == 'main' }}
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.2.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           filters: .github/utils/file-filters.yaml
       - name: Set Output
         id: set-output
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo 'services=["${{ inputs.service }}"]' >> "$GITHUB_OUTPUT"
-            echo 'environment=development' >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.event_name}}" == "workflow_dispatch" ]]; then
+            echo 'service=["${{ inputs.service}}"]' >> $GITHUB_OUTPUT
+            echo "environment=development" >> $GITHUB_OUTPUT
 
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
-            tag="${GITHUB_REF_NAME}"        # e.g. service-a@1.2.3
-            svc="${tag%%@*}"
-            echo "services=[\"$svc\"]" >> "$GITHUB_OUTPUT"
-            echo 'environment=production' >> "$GITHUB_OUTPUT"
-
-          else # push to main
-            echo 'services=${{ steps.filter.outputs.changes }}' >> "$GITHUB_OUTPUT"
-            echo 'environment=staging' >> "$GITHUB_OUTPUT"
+           # services/node/api@1.2.3
+           tag="${GITHUB_REF_NAME}"
+           svc="${tag%%@*}"
+           echo "service=[\"$svc\"]" >> $GITHUB_OUTPUT
+           echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "service=${{ steps.filter.outputs.services }}" >> $GITHUB_OUTPUT
+            echo "environment=staging" >> $GITHUB_OUTPUT 
           fi
-
   build-push-container-images:
     runs-on: ubuntu-24.04
-    if: ${{ needs.filter.outputs.services != '[]' && needs.filter.outputs.services != '' }}
     needs: filter
+    if: ${{ needs.filter.outputs.services != '[]' && needs.filter.outputs.services != ''}}
+    permissions:
+      actions: write # used to trigger deploy workflow
+      contents: read
     strategy:
+      fail-fast: false
       matrix:
         service: ${{ fromJson(needs.filter.outputs.services) }}
-      fail-fast: false
     steps:
-      - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v5.0.0
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.0.0
         with:
-          # Setting fetch-depth: 0 ensure tags are fetched (so git describe works properly)
           fetch-depth: 0
-      - uses: ./.github/actions/setup-dependencies
+      - name: Install task
+        uses: ./.github/actions/setup-dependencies
         with:
-          install_task: "true"
-      - name: Login to Docker Hub
-        if: ${{ !env.ACT }}
-        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+          task_version: v3.44.1
+      - name: Auth to dockerhub
+        if: ${{ !env.ACT}}
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@05340d1c670183e7caabdb33ae9f1c80fae3b0c2 # v3.6.0
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@1583c0f09d26c58c59d25b0eef29792b7ce99d9a # v3.11.1
-      - name: Compute image tag
+      - name: Docker Setup QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 #v3.6.0
+      - name: Docker Setup Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 #v3.7.0
+      - name: Comput image tag
         id: image-tag
         working-directory: ${{ matrix.service }}
         env:
           ENVIRONMENT: ${{ needs.filter.outputs.environment }}
-          INPUT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
           SERVICE: ${{ matrix.service }}
-        shell: bash
+          INPUT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || ''}}
         run: |
           if [[ -n "$INPUT_VERSION" ]]; then
-            version=$INPUT_VERSION
+            version="$INPUT_VERSION"
             image_tag=$(task utils:manual-version-tag -- "$INPUT_VERSION")
           elif [[ "$ENVIRONMENT" == "production" ]]; then
             version=$(task utils:generate-version -- "$SERVICE")
@@ -109,31 +103,27 @@ jobs:
             version=$(task utils:generate-extended-version -- "$SERVICE")
             image_tag=$(task utils:generate-extended-version-tag -- "$SERVICE")
           fi
-
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push Docker images
-        uses: docker/build-push-action@ccc2b40e9ea6518f9252a22a990f8e868370f62e # v6.18.0
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "image_tag=$image_tag" >> $GITHUB_OUTPUT
+          # TODO: generate version and image_tag properly
+          echo "version=${version}" 
+          echo "image_tag=$image_tag"
+      - name: Build and push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: ${{ matrix.service }}
-          push: ${{ !env.ACT }} # Don't push images when running locally
-          tags: ${{ steps.image-tag.outputs.image_tag }}
-          platforms: linux/amd64 # TODO: add multi arch "linux/amd64,linux/arm64"
-          # TODO: handle cache invalidation for version changes in package.json
+          push: ${{!env.ACT}}
+          tags: ${{ steps.image-tag.outputs.image_tag}}
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Trigger deploy as a separate workflow to:
-      #   1. enable running it manually via workflow_dispatch
-      #   2. keep workflows smaller and more focused
-      # We could use reuseable workflow (with workflow_call trigger... but being able to trigger manually is nice)
-      - name: Trigger Deploy
-        if: ${{ !env.ACT }} # Don't trigger deploy when running locally
+      - name: Trigger deploy
+        if: ${{ !env.ACT}}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN}}
         run: |
           gh workflow run update-gitops-manifests.yaml \
-            -f service=${{ matrix.service }} \
-            -f version=${{ steps.image-tag.outputs.version }} \
-            -f environment=${{ needs.filter.outputs.environment }}
+            -f service=${{ matrix.service}} \
+            -f version=${{ steps.image-tag.outputs.version}} \
+            -f environment=${{ needs.filter.outputs.environment}}
