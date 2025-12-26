@@ -3,7 +3,7 @@ name: Release Please
 on:
   push:
     branches:
-      - main
+      - week1
   workflow_dispatch:
 
 permissions:
@@ -21,4 +21,4 @@ jobs:
           token: ${{ secrets.GHA_CAPSTONE_PERSONAL_ACCESS_TOKEN }}
           config-file: .github/utils/release-please-config.json
           manifest-file: .github/utils/.release-please-manifest.json
-          target-branch: main
+          target-branch: week1
