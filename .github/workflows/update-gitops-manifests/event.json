@@ -1,7 +1,8 @@
 {
   "inputs": {
-    "service": "services/node/api-node",
-    "version": "foobarbazbing",
+    "service": "services/go/api-golang",
+    "version": "barbaz",
+    "image_tag": "foo:barbaz",
     "environment": "production"
   }
 }
